@@ -66,25 +66,21 @@ void loop()
   // CHAVES OFF
   if (key2 == 0 && key1 == 0)
   {
-    Serial.println("Sistema off_line");
-    a = 0;
-    b = 0;
-    digitalWrite(TX1, a);
-    digitalWrite(TX2, b);
+    systemOffLineStatus();
   }
 
   // CHAVES ATIVA SEC1
   else if (key2 == 0 && key1 == 1)
   {
     makeFrame(flag1, addressSec1, data1);
-    sendDataToS1();
+    primarySendFrame();
   }
 
   // CHAVES ATIVA SEC2
   else if (key2 == 1 && key1 == 0)
   {
     makeFrame(flag2, addressSec2, data2);
-    sendDataToS2();
+    primarySendFrame();
   }
 
   // CHAVES ATIVA SEC1 para SEC2
@@ -92,74 +88,6 @@ void loop()
   {
     s1SendDataToS2();
   }
-}
-
-// Receptor1
-void sendDataToS1()
-{
-  // envio do frame MOD RS485
-  for (int i = 0; i < frameSize; i++)
-  {
-    Serial.print(frame[i]);
-    if (frame[i] == 1)
-    {
-      a = 1;
-      b = 0;
-    }
-    else if (frame[i] == 0)
-    {
-      a = 0;
-      b = 1;
-    }
-    else
-    {
-      a = 0;
-      b = 0;
-    }
-    digitalWrite(TX1, a);
-    digitalWrite(TX2, b);
-    delay(1000);
-    // Serial.print("(");
-    // Serial.print(a);
-    // Serial.print(".");
-    // Serial.print(b);
-    // Serial.print(")");
-  }
-  Serial.println();
-}
-
-// Receptor2
-void sendDataToS2()
-{
-  // envio do frame MOD RS485
-  for (int i = 0; i < frameSize; i++)
-  {
-    Serial.print(frame[i]);
-    if (frame[i] == 1)
-    {
-      a = 1;
-      b = 0;
-    }
-    else if (frame[i] == 0)
-    {
-      a = 0;
-      b = 1;
-    }
-    else
-    {
-      a = 0;
-      b = 0;
-    }
-    digitalWrite(TX1, a);
-    digitalWrite(TX2, b);
-    delay(1000);
-    // Serial.print("(");
-    // Serial.print(a);
-    // Serial.print(".");
-    // Serial.print(b);
-    // Serial.print(")");
-  }
-  Serial.println();
 }
 
 void s1SendDataToS2()
@@ -170,6 +98,34 @@ void s1SendDataToS2()
   digitalWrite(TX1, a);
   digitalWrite(TX2, b);
   delay(1000);
+}
+
+void primarySendFrame()
+{
+  for (int i = 0; i < frameSize; i++)
+  {
+    Serial.print(frame[i]);
+    if (frame[i] == 1)
+    {
+      a = 1;
+      b = 0;
+    }
+    else if (frame[i] == 0)
+    {
+      a = 0;
+      b = 1;
+    }
+    else
+    {
+      a = 0;
+      b = 0;
+    }
+    digitalWrite(TX1, a);
+    digitalWrite(TX2, b);
+    delay(1000);
+  }
+
+  Serial.println();
 }
 
 void makeFrame(const int *flag, const int *addressReceiver, const int *data)
@@ -193,4 +149,13 @@ void makeFrame(const int *flag, const int *addressReceiver, const int *data)
   {
     frame[(flagSize + addressSize + dataSize + i)] = flag[i];
   }
+}
+
+void systemOffLineStatus()
+{
+  Serial.println("Sistema off_line");
+  a = 0;
+  b = 0;
+  digitalWrite(TX1, a);
+  digitalWrite(TX2, b);
 }
