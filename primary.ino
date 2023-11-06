@@ -86,7 +86,8 @@ void loop()
   // CHAVES ATIVA SEC1 para SEC2
   else
   {
-    s1SendDataToS2();
+    reciveDataFromS2();
+    primarySendFrame();
   }
 }
 
