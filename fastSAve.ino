@@ -2,6 +2,9 @@
 //
 #include <stdint.h>
 
+const int sn = 0;
+bool canSend = true;
+
 const int pinBit1 = 2;
 const int pinBit2 = 3;
 int key1 = 0;
@@ -39,6 +42,7 @@ int addressSec2[] = {1, 1, 1, 1, 1, 1, 0, 1};
 
 // Criado a variavel frame com o respectivo tamanho
 int frame[32];
+int backUpFrame[32];
 
 void setup()
 {
@@ -73,7 +77,17 @@ void loop()
   else if (key2 == 0 && key1 == 1)
   {
     makeFrame(flag1, addressSec1, data1);
+    
+    storeFrame();
+    
     primarySendFrame();
+    
+    //inicia o timer
+    
+    sn = sn + 1;
+    
+    canSend = false;
+    
   }
 
   // CHAVES ATIVA SEC2
@@ -90,6 +104,7 @@ void loop()
   }
 }
 
+//função de envio, mas comunicação entre secundarios
 void s1SendDataToS2()
 {
   Serial.println("Ainda sem Informação");
@@ -100,6 +115,7 @@ void s1SendDataToS2()
   delay(1000);
 }
 
+//Função para envio do frame
 void primarySendFrame()
 {
   for (int i = 0; i < frameSize; i++)
@@ -128,6 +144,7 @@ void primarySendFrame()
   Serial.println();
 }
 
+//Função para formar o frame
 void makeFrame(const int *flag, const int *addressReceiver, const int *data)
 {
   for (int i = 0; i < flagSize; i++)
@@ -151,6 +168,7 @@ void makeFrame(const int *flag, const int *addressReceiver, const int *data)
   }
 }
 
+//Printa que as chaves estão desligadas
 void systemOffLineStatus()
 {
   Serial.println("Sistema off_line");
@@ -158,4 +176,26 @@ void systemOffLineStatus()
   b = 0;
   digitalWrite(TX1, a);
   digitalWrite(TX2, b);
+}
+
+//Função para armazenar frame
+void storeFrame()
+{
+  backUpFrame = frame;
+}
+
+//Contagem do momento para enviar
+void sendingMoment()
+{
+    makeFrame(flag1, addressSec1, data1);
+    
+    storeFrame();
+    
+    primarySendFrame();
+    
+    //inicia o timer
+    
+    sn = sn + 1;
+    
+    canSend = false;
 }
