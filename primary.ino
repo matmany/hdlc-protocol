@@ -23,6 +23,7 @@ int dataSize;
 int flagSize;
 int frameSize;
 int addressSize;
+int iFrameSize;
 int ackPosition;
 
 // Dados para emissão
@@ -41,17 +42,16 @@ int addressPri[] = {1, 1, 1, 1, 1, 1, 1, 1};
 int addressSec1[] = {1, 1, 1, 1, 1, 1, 1, 0};
 int addressSec2[] = {1, 1, 1, 1, 1, 1, 0, 1};
 
-
 // Bits de Controle
-int iFrame[] = {0, 1,0,1, 0, 0,0,0};
+int iFrame[] = {0, 0, 0, 0, 0, 0, 0, 0};
 const int nsPosition = 1;
 const int nrPosition = 5;
 const int sequenceSize = 3;
 const int poolFinalPosition = 4;
 
 // Criado a variavel frame com o respectivo tamanho
-int frame[33];
-int backUpFrame[33];
+int frame[40];
+int backUpFrame[40];
 
 void setup()
 {
@@ -69,10 +69,8 @@ void setup()
   frameSize = sizeof(frame) / sizeof(frame[0]);
   flagSize = sizeof(flag1) / sizeof(flag1[0]);
   addressSize = sizeof(addressPri) / sizeof(addressPri[0]);
+  iFrameSize = sizeof(iFrame) / sizeof(iFrame[0]);
   ackPosition = flagSize + addressSize;
-
-  incrementBinary(iFrame, nsPosition, nsPosition+2);
-  incrementBinary(iFrame, nrPosition, nrPosition+2);
 }
 
 void loop()
@@ -91,15 +89,17 @@ void loop()
   else if (key2 == 0 && key1 == 1)
   {
     if (canSend)
-      int snBinary = static_cast<int>(sn);
-    sendingMoment(flag1, addressSec1, data1, sn);
-    else receiveConfirmation();
+    {
+      sendingMoment(flag1, addressSec1, data1);
+    }
+    else
+      receiveConfirmation();
   }
 
   // CHAVES ATIVA SEC2
   else if (key2 == 1 && key1 == 0)
   {
-    makeFrame(flag2, addressSec2, data2, sn);
+    makeFrame(flag2, addressSec2, data2);
     primarySendFrame();
   }
 
@@ -148,7 +148,7 @@ void primarySendFrame()
   Serial.println();
 }
 
-void makeFrame(const int *flag, const int *addressReceiver, const int *data, int snBinary)
+void makeFrame(const int *flag, const int *addressReceiver, const int *data)
 {
   int frameLastPosition = 0;
   for (int i = 0; i < flagSize; i++)
@@ -163,8 +163,11 @@ void makeFrame(const int *flag, const int *addressReceiver, const int *data, int
     frameLastPosition++;
   }
 
-  frame[(frameLastPosition)] = snBinary;
-  frameLastPosition++;
+  for (int i = 0; i < iFrameSize; i++)
+  {
+    frame[frameLastPosition] = iFrame[i];
+    frameLastPosition++;
+  }
 
   for (int i = 0; i < dataSize; i++)
   {
@@ -207,10 +210,9 @@ void purgeFrame()
 void sendingMoment(
     const int *flag,
     const int *addressReceiver,
-    const int *data,
-    int snBinary)
+    const int *data)
 {
-  makeFrame(flag, addressReceiver, data, snBinary);
+  makeFrame(flag, addressReceiver, data);
 
   storeFrame();
 
@@ -218,7 +220,7 @@ void sendingMoment(
 
   // startTimer()
 
-  sn = sn + 1;
+  incrementNSBits();
 
   canSend = false;
 }
@@ -226,16 +228,21 @@ void sendingMoment(
 void receiveConfirmation()
 {
   int *receivedData = readMode();
-  int ack = receivedData[ackPosition];
 
-  if (dataIsValid(receivedData) && ack == sn)
-  {
-    // StopTimer();
+  if (verifyAddres(receivedData) == false)
+    return;
 
-    purgeFrame();
+  if (verifyFlag(receivedData) == false)
+    return;
 
-    canSend = true;
-  }
+  if (nSEqualToNR(receivedData) == false)
+    return;
+
+  purgeFrame();
+
+  incrementNRBits();
+
+  canSend = true;
 }
 
 int *readMode()
@@ -270,25 +277,88 @@ int *readMode()
   return receivedData;
 }
 
-bool dataIsValid(int *frame)
-{
-  return true;
-}
-
 void incrementBinary(int binary[], int start, int size)
 {
   int carry = 1; // Inicialmente, um carry de 1 para adicionar
   for (int i = size; i >= start; i--)
   {
-    if (binary[i] == 0)
+    if (iFrame[i] == 0)
     {
-      binary[i] = 1;
+      iFrame[i] = 1;
       carry = 0; // Não há carry após a adição
       break;
     }
     else
     {
-      binary[i] = 0;
+      iFrame[i] = 0;
     }
   }
+}
+
+/**
+ * Bits de contagem de envios do primário
+ */
+void incrementNSBits()
+{
+  incrementBinary(iFrame, nsPosition, nsPosition + 2);
+}
+
+/**
+ * Bits de confirmação
+ */
+void incrementNRBits()
+{
+  incrementBinary(iFrame, nrPosition, nrPosition + 2);
+}
+
+bool verifyAddres(int *receivedData)
+{
+  // Verificando se o endereço é valido
+  bool Test_address = true;
+  for (int i = 0; i < 8; i++)
+  {
+    if (addressSec2[i] != receivedData[i + 8])
+    {
+      Test_address = false;
+      break; // Se um elemento for diferente, nao ha necessidade de verificar os outros
+    }
+  }
+
+  return Test_address;
+}
+
+bool verifyFlag(int *receivedData)
+{
+  // Comparando as flags iniciais e finais
+  bool FlagInOut = true;
+  for (int i = 0; i < 8; i++)
+  {
+    if (receivedData[i] != receivedData[frameSize - (8 - i)])
+    {
+      FlagInOut = false;
+      break; // Se um elemento for diferente, não há necessidade de verificar os outros
+    }
+  }
+
+  return FlagInOut;
+}
+
+bool nSEqualToNR(int *receivedData)
+{
+  int nsLimit = nsPosition + sequenceSize;
+  int receivedDataNRPostion = 21;
+
+  for (int i = nsPosition; i < nsLimit; i++)
+  {
+    if (iFrame[i] == receivedData[receivedDataNRPostion])
+    {
+      receivedDataNRPostion++;
+      continue;
+    }
+    else
+    {
+      return false;
+    }
+  }
+  return true;
 }
