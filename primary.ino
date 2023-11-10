@@ -1,5 +1,6 @@
 // C++ code
 //
+//
 #include <stdint.h>
 
 bool sn = false;
