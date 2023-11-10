@@ -53,6 +53,13 @@ const int poolFinalPosition = 4;
 int frame[40];
 int backUpFrame[40];
 
+const int seedingDelay = 100;
+const int receivingsDelay = 99;
+
+int receivedDataSize;
+int receivedData[40];
+int receivedSave[40];
+
 void setup()
 {
   Serial.begin(9600);
@@ -70,6 +77,7 @@ void setup()
   flagSize = sizeof(flag1) / sizeof(flag1[0]);
   addressSize = sizeof(addressPri) / sizeof(addressPri[0]);
   iFrameSize = sizeof(iFrame) / sizeof(iFrame[0]);
+  receivedDataSize = sizeof(receivedData) / sizeof(receivedData[0]);
   ackPosition = flagSize + addressSize;
 }
 
@@ -142,9 +150,13 @@ void primarySendFrame()
     }
     digitalWrite(TX1, a);
     digitalWrite(TX2, b);
-    delay(1000);
+    delay(seedingDelay);
   }
 
+  a=0;
+  b=0;
+  digitalWrite(TX1, a);
+  digitalWrite(TX2, b);
   Serial.println();
 }
 
@@ -201,6 +213,7 @@ void storeFrame()
 
 void purgeFrame()
 {
+  Serial.println("purge");
   for (int i = 0; i < frameSize; i++)
   {
     backUpFrame[i] = 0;
@@ -212,6 +225,7 @@ void sendingMoment(
     const int *addressReceiver,
     const int *data)
 {
+  Serial.println("Enviando...");
   makeFrame(flag, addressReceiver, data);
 
   storeFrame();
@@ -225,41 +239,21 @@ void sendingMoment(
   canSend = false;
 }
 
-void receiveConfirmation()
-{
-  int *receivedData = readMode();
-
-  if (verifyAddres(receivedData) == false)
-    return;
-
-  if (verifyFlag(receivedData) == false)
-    return;
-
-  if (nSEqualToNR(receivedData) == false)
-    return;
-
-  purgeFrame();
-
-  incrementNRBits();
-
-  canSend = true;
-}
-
-int *readMode()
+void readingData()
 {
   int dataA;
   int dataB;
-  int receivedData[32];
-  int receivedDataSize = sizeof(receivedData) / sizeof(receivedData[0]);
+  Serial.print("void reading data");
+  Serial.println();
 
   for (int i = 0; i < receivedDataSize; i++)
   {
-    delay(999);
+    delay(receivingsDelay);
     dataA = 0;
     dataB = 0;
     dataA = digitalRead(RX1);
     dataB = digitalRead(RX2);
-
+    
     if (dataA == 1 && dataB == 0)
     {
       receivedData[i] = 1;
@@ -272,10 +266,54 @@ int *readMode()
     {
       i = -1;
     }
+    Serial.print(receivedData[i]);
+  }
+  Serial.println();
+}
+
+void receiveConfirmation()
+{
+  
+  Serial.println("receiveConfirmation");
+  
+  readingData();
+  
+  
+  Serial.println("Recebido:");
+
+  for (int i = 0; i < receivedDataSize; i++) {
+      	Serial.print(receivedData[i]);
   }
 
-  return receivedData;
+  if (verifyAddres(receivedData) == false)
+  {
+    Serial.println("Address fail");
+    return ;
+  }
+
+  if (verifyFlag(receivedData) == false)
+  {
+    Serial.println("Flag fail");
+    return;
+  }
+
+  if (nSEqualToNR(receivedData) == false)
+  {
+    Serial.println("NS NR fail");
+    return;
+  }
+
+  purgeFrame();
+
+  incrementNRBits();
+
+  Serial.println("CanSend");
+  canSend = true;
+  
+  delay(100);
 }
+
+
 
 void incrementBinary(int binary[], int start, int size)
 {
@@ -317,7 +355,7 @@ bool verifyAddres(int *receivedData)
   bool Test_address = true;
   for (int i = 0; i < 8; i++)
   {
-    if (addressSec2[i] != receivedData[i + 8])
+    if (addressPri[i] != receivedData[i + 8])
     {
       Test_address = false;
       break; // Se um elemento for diferente, nao ha necessidade de verificar os outros
@@ -346,8 +384,8 @@ bool verifyFlag(int *receivedData)
 bool nSEqualToNR(int *receivedData)
 {
   int nsLimit = nsPosition + sequenceSize;
-  int receivedDataNRPostion = 21;
-
+  //int receivedDataNRPostion = 21;
+  int receivedDataNRPostion = flagSize+addressSize+iFrameSize-3;
   for (int i = nsPosition; i < nsLimit; i++)
   {
     if (iFrame[i] == receivedData[receivedDataNRPostion])
