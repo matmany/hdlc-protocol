@@ -1,5 +1,6 @@
 // C++ code
 //
+//
 #include <stdint.h>
 
 bool sn = false;
@@ -41,6 +42,7 @@ int flag3[] = {0, 0, 0, 0, 0, 0, 1, 1};
 int addressPri[] = {1, 1, 1, 1, 1, 1, 1, 1};
 int addressSec1[] = {1, 1, 1, 1, 1, 1, 1, 0};
 int addressSec2[] = {1, 1, 1, 1, 1, 1, 0, 1};
+int addressOff[] = {0,0,0,0,0,0,0,0};
 
 // Bits de Controle
 int iFrame[] = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -53,8 +55,8 @@ const int poolFinalPosition = 4;
 int frame[40];
 int backUpFrame[40];
 
-const int seedingDelay = 100;
-const int receivingsDelay = 99;
+const int seedingDelay = 200;
+const int receivingsDelay = 199;
 
 int receivedDataSize;
 int receivedData[40];
@@ -90,7 +92,7 @@ void loop()
   // CHAVES OFF
   if (key2 == 0 && key1 == 0)
   {
-    systemOffLineStatus();
+    systemOffLineStatus(flag1, data1);
   }
 
   // CHAVES ATIVA SEC1
@@ -107,8 +109,12 @@ void loop()
   // CHAVES ATIVA SEC2
   else if (key2 == 1 && key1 == 0)
   {
-    makeFrame(flag2, addressSec2, data2);
-    primarySendFrame();
+    if (canSend)
+    {
+      sendingMoment(flag2, addressSec2, data2);
+    }
+    else
+      receiveConfirmation();
   }
 
   // CHAVES ATIVA SEC1 para SEC2
@@ -120,16 +126,24 @@ void loop()
 
 void s1SendDataToS2()
 {
-  Serial.println("Ainda sem Informação");
+  for (int i = 0; i < 8; i++)
+  {
+    iFrame[i] = 0;
+  }
+  Serial.println("Ainda sem Informacao");
   a = 0;
   b = 0;
   digitalWrite(TX1, a);
   digitalWrite(TX2, b);
   delay(1000);
+
+  canSend = true;
 }
 
 void primarySendFrame()
 {
+  a = 0;
+  b = 0;
   for (int i = 0; i < frameSize; i++)
   {
     Serial.print(frame[i]);
@@ -153,8 +167,8 @@ void primarySendFrame()
     delay(seedingDelay);
   }
 
-  a=0;
-  b=0;
+  a = 0;
+  b = 0;
   digitalWrite(TX1, a);
   digitalWrite(TX2, b);
   Serial.println();
@@ -187,6 +201,9 @@ void makeFrame(const int *flag, const int *addressReceiver, const int *data)
     frameLastPosition++;
   }
 
+  int crc[8];
+  makeCRC();
+
   for (int i = 0; i < flagSize; i++)
   {
     frame[frameLastPosition] = flag[i];
@@ -194,13 +211,25 @@ void makeFrame(const int *flag, const int *addressReceiver, const int *data)
   }
 }
 
-void systemOffLineStatus()
+void systemOffLineStatus(
+  int *flag,
+  int *data
+)
 {
+  for (int i = 0; i < 8; i++)
+  {
+    iFrame[i] = 0;
+  }
   Serial.println("Sistema off_line");
+
+  sendingReset(flag, data);
+  canSend = true;
+  
   a = 0;
   b = 0;
   digitalWrite(TX1, a);
   digitalWrite(TX2, b);
+  delay(90);
 }
 
 void storeFrame()
@@ -253,7 +282,7 @@ void readingData()
     dataB = 0;
     dataA = digitalRead(RX1);
     dataB = digitalRead(RX2);
-    
+
     if (dataA == 1 && dataB == 0)
     {
       receivedData[i] = 1;
@@ -273,22 +302,22 @@ void readingData()
 
 void receiveConfirmation()
 {
-  
+
   Serial.println("receiveConfirmation");
-  
+
   readingData();
-  
-  
+
   Serial.println("Recebido:");
 
-  for (int i = 0; i < receivedDataSize; i++) {
-      	Serial.print(receivedData[i]);
+  for (int i = 0; i < receivedDataSize; i++)
+  {
+    Serial.print(receivedData[i]);
   }
 
   if (verifyAddres(receivedData) == false)
   {
     Serial.println("Address fail");
-    return ;
+    return;
   }
 
   if (verifyFlag(receivedData) == false)
@@ -309,11 +338,9 @@ void receiveConfirmation()
 
   Serial.println("CanSend");
   canSend = true;
-  
-  delay(100);
+
+  delay(90);
 }
-
-
 
 void incrementBinary(int binary[], int start, int size)
 {
@@ -384,8 +411,8 @@ bool verifyFlag(int *receivedData)
 bool nSEqualToNR(int *receivedData)
 {
   int nsLimit = nsPosition + sequenceSize;
-  //int receivedDataNRPostion = 21;
-  int receivedDataNRPostion = flagSize+addressSize+iFrameSize-3;
+  // int receivedDataNRPostion = 21;
+  int receivedDataNRPostion = flagSize + addressSize + iFrameSize - 3;
   for (int i = nsPosition; i < nsLimit; i++)
   {
     if (iFrame[i] == receivedData[receivedDataNRPostion])
@@ -400,3 +427,17 @@ bool nSEqualToNR(int *receivedData)
   }
   return true;
 }
+
+void sendingReset(
+  const int *flag,
+  const int *data
+) {
+  makeFrame(flag, addressOff, data);
+  primarySendFrame();
+}
+
+//CRC
+/**
+ * Para conferir o crc é necessario fazer um ou exclusivo dos dados de Addr+Frame+Data
+ * 
+*/

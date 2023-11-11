@@ -31,14 +31,14 @@ int addressSec2[] = {1, 1, 1, 1, 1, 1, 0, 1};
 
 int data[] = {1, 1, 1, 1, 1, 1, 1, 1};
 
-int iFrame[] = {0, 0, 0, 0, 0, 0, 0, 0};
+int iFrame[] = {0, 0, 0, 0, 1, 0, 0, 0};
 const int nsPosition = 1;
 const int nrPosition = 5;
 const int sequenceSize = 3;
 const int poolFinalPosition = 4;
 
-const int seedingDelay = 100;
-const int receivingsDelay = 99;
+const int seedingDelay = 200;
+const int receivingsDelay = 199;
 
 
 // Criado a variavel frame com o respectivo tamanho
@@ -120,7 +120,8 @@ void makeFrame(const int *flag, const int *addressReceiver, const int *data)
 void sendFrame()
 {
   Serial.println("sendFrame");
-
+  a=0;
+  b=0;
   for (int i = 0; i < frameSize; i++)
   {
     Serial.print(frame[i]);
@@ -177,6 +178,8 @@ void readingData()
     else
     {
       i = -1;
+      digitalWrite(TX1, 0);
+      digitalWrite(TX2, 0);
       continue;
     }
     Serial.print(receivedData[i]);
@@ -195,7 +198,14 @@ bool receive()
   
   if (verifyAddres(receivedData) == false)
   {
+    
     Serial.println("Address fail");
+    //zera byte de controle
+    for (int i = 0; i < 8; i++)
+  	{
+    	iFrame[i] = 0;
+  	}
+    iFrame[4]=1;
     return false;
   }
 
@@ -222,7 +232,7 @@ void sendConfirmation()
 
   makeFrame(flag, addressPri, data);
 
-  delay(300);
+  delay(0);
   
   sendFrame();
 }
@@ -313,6 +323,7 @@ bool dataNSEqualToLocalNR(int *receivedData)
   for (int i = nrPosition; i < nrLimit; i++)
   {
     Serial.print(iFrame[i]);
+    Serial.print(receivedData[receivedDataNSPostion]);
     if (iFrame[i] == receivedData[receivedDataNSPostion])
     {
       receivedDataNSPostion++;
