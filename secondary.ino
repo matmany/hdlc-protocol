@@ -11,9 +11,11 @@ const int readModePin = 9;
 int dataA;
 int dataB;
 
+constexpr int quadroSize = 48;
+
 int receivedDataSize;
-int receivedData[40];
-int receivedSave[40];
+int receivedData[quadroSize];
+int receivedSave[quadroSize];
 int dataIndex = 0;
 bool receivingFlag = false;
 
@@ -22,6 +24,9 @@ int flagSize;
 int frameSize;
 int addressSize;
 int iFrameSize;
+int crcSize;
+const int byteSize = 8;
+
 
 int addressPri[] = {1, 1, 1, 1, 1, 1, 1, 1};
 
@@ -32,6 +37,8 @@ int addressSec2[] = {1, 1, 1, 1, 1, 1, 0, 1};
 int data[] = {1, 1, 1, 1, 1, 1, 1, 1};
 
 int iFrame[] = {0, 0, 0, 0, 1, 0, 0, 0};
+int crc[] = {0, 0, 0, 0, 0, 0, 0, 0};
+
 const int nsPosition = 1;
 const int nrPosition = 5;
 const int sequenceSize = 3;
@@ -40,9 +47,8 @@ const int poolFinalPosition = 4;
 const int seedingDelay = 200;
 const int receivingsDelay = 199;
 
-
 // Criado a variavel frame com o respectivo tamanho
-int frame[40];
+int frame[quadroSize];
 
 void setup()
 {
@@ -52,7 +58,7 @@ void setup()
   pinMode(TX2, OUTPUT); // O RX no pino 11 Entrada
   pinMode(readModePin, INPUT);
   Serial.begin(9600); // Inicializa a comunicação serial (opcional, para depuração)
-  
+
   digitalWrite(TX1, 0);
   digitalWrite(TX2, 0);
 
@@ -62,23 +68,23 @@ void setup()
   addressSize = sizeof(addressSec2) / sizeof(addressSec2[0]);
   iFrameSize = sizeof(iFrame) / sizeof(iFrame[0]);
   receivedDataSize = sizeof(receivedData) / sizeof(receivedData[0]);
-
 }
 
 void loop()
 {
-  if(receiveData() == true) {
+  if (receiveData() == true)
+  {
     sendConfirmation();
-  }  
+  }
 }
 
 bool receiveData()
 {
-  if(receive() == false)
+  if (receive() == false)
     return false;
 
   incrementNRBits();
-  
+
   return true;
 }
 
@@ -110,6 +116,15 @@ void makeFrame(const int *flag, const int *addressReceiver, const int *data)
     frameLastPosition++;
   }
 
+  // Cria os bits de CRC
+  xorArrays(addressReceiver, iFrame, data, crc, crcSize);
+
+  for (int i = 0; i < crcSize; i++)
+  {
+    frame[frameLastPosition] = crc[i];
+    frameLastPosition++;
+  }
+
   for (int i = 0; i < flagSize; i++)
   {
     frame[frameLastPosition] = flag[i];
@@ -120,8 +135,8 @@ void makeFrame(const int *flag, const int *addressReceiver, const int *data)
 void sendFrame()
 {
   Serial.println("sendFrame");
-  a=0;
-  b=0;
+  a = 0;
+  b = 0;
   for (int i = 0; i < frameSize; i++)
   {
     Serial.print(frame[i]);
@@ -158,7 +173,7 @@ void readingData()
   int dataB;
   Serial.print("void reading data");
   Serial.println();
-  
+
   for (int i = 0; i < receivedDataSize; i++)
   {
     delay(receivingsDelay);
@@ -191,21 +206,22 @@ bool receive()
 {
   readingData();
 
-  for (int i = 0; i < receivedDataSize; i++) {
-      	Serial.print(receivedData[i]);
+  for (int i = 0; i < receivedDataSize; i++)
+  {
+    Serial.print(receivedData[i]);
   }
   Serial.println();
-  
+
   if (verifyAddres(receivedData) == false)
   {
-    
+
     Serial.println("Address fail");
-    //zera byte de controle
+    // zera byte de controle
     for (int i = 0; i < 8; i++)
-  	{
-    	iFrame[i] = 0;
-  	}
-    iFrame[4]=1;
+    {
+      iFrame[i] = 0;
+    }
+    iFrame[4] = 1;
     return false;
   }
 
@@ -215,14 +231,20 @@ bool receive()
     return false;
   }
 
+  if (verifyCRC(receivedData) == false)
+  {
+    Serial.println("CRC fail");
+    return false;
+  }
+
   if (dataNSEqualToLocalNR(receivedData) == false)
   {
     Serial.println("NS NR fail");
     return false;
   }
-  
+
   Serial.println("Confirmed receive");
-  
+
   return true;
 }
 
@@ -233,7 +255,7 @@ void sendConfirmation()
   makeFrame(flag, addressPri, data);
 
   delay(0);
-  
+
   sendFrame();
 }
 
@@ -269,6 +291,21 @@ bool verifyFlag(int *receivedData)
   return FlagInOut;
 }
 
+bool bytesAreEqual(int *byte1, int *byte2)
+{
+  bool equal = true;
+  for (int i = 0; i < 8; i++)
+  {
+    if (byte1[i] != byte2[frameSize - (8 - i)])
+    {
+      equal = false;
+      break; // Se um elemento for diferente, não há necessidade de verificar os outros
+    }
+  }
+
+  return equal;
+}
+
 /**
  * Bits de confirmação
  */
@@ -276,15 +313,17 @@ void incrementNRBits()
 {
   Serial.println("incrementNRBits");
 
-  for (int i = 0; i < iFrameSize; i++) {
-      	Serial.print(iFrame[i]);
+  for (int i = 0; i < iFrameSize; i++)
+  {
+    Serial.print(iFrame[i]);
   }
   Serial.println();
 
   incrementBinary(iFrame, nrPosition, nrPosition + 2);
 
-  for (int i = 0; i < iFrameSize; i++) {
-      	Serial.print(iFrame[i]);
+  for (int i = 0; i < iFrameSize; i++)
+  {
+    Serial.print(iFrame[i]);
   }
 
   Serial.println();
@@ -311,13 +350,13 @@ void incrementBinary(int binary[], int start, int size)
 bool dataNSEqualToLocalNR(int *receivedData)
 {
   int nrLimit = nrPosition + sequenceSize;
-  int receivedDataNSPostion = flagSize+addressSize+1;
-  
-  //Serial.println("Iframe:");
-  //for(int i = 0; i < iFrameSize; i++)
+  int receivedDataNSPostion = flagSize + addressSize + 1;
+
+  // Serial.println("Iframe:");
+  // for(int i = 0; i < iFrameSize; i++)
   //{
-  //  Serial.println(iFrame[i]);
-  //}
+  //   Serial.println(iFrame[i]);
+  // }
 
   Serial.println("Iframe:");
   for (int i = nrPosition; i < nrLimit; i++)
@@ -336,3 +375,38 @@ bool dataNSEqualToLocalNR(int *receivedData)
   }
   return true;
 }
+
+// 8+8+8+8+crc+8
+// flag + address + iframe + data + crc + flag;
+bool verifyCRC(int *receivedData)
+{
+  const int addressPosition = flagSize;
+  const int iFramePosition = addressPosition + addressSize;
+  const int dataPosition = iFramePosition + iFrameSize;
+  const int crcPositionInFrame = dataPosition + dataSize;
+
+  for (int i = 0; i < byteSize; i++)
+  {
+    int crcBit = receivedData[crcPositionInFrame + i];
+
+    int xorResult = receivedData[addressPosition + i] ^
+                    receivedData[iFramePosition + i] ^
+                    receivedData[dataPosition + i];
+
+    if (xorResult != crcBit)
+      return false;
+  }
+  return true;
+}
+
+// Tratativa de error
+// reenviar quando não for verificado
+
+void xorArrays(const int array1[], const int array2[], const int array3[], int result[], int size)
+{
+  for (int i = 0; i < size; ++i)
+  {
+    result[i] = array1[i] ^ array2[i] ^ array3[i];
+  }
+}
+

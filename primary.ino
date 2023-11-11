@@ -3,6 +3,9 @@
 //
 #include <stdint.h>
 
+
+const int byteSize = 8;
+
 bool sn = false;
 bool canSend = true;
 
@@ -26,6 +29,7 @@ int frameSize;
 int addressSize;
 int iFrameSize;
 int ackPosition;
+int crcSize;
 
 // Dados para emissão
 int data1[] = {1, 1, 1, 1, 1, 1, 1, 1};
@@ -42,7 +46,8 @@ int flag3[] = {0, 0, 0, 0, 0, 0, 1, 1};
 int addressPri[] = {1, 1, 1, 1, 1, 1, 1, 1};
 int addressSec1[] = {1, 1, 1, 1, 1, 1, 1, 0};
 int addressSec2[] = {1, 1, 1, 1, 1, 1, 0, 1};
-int addressOff[] = {0,0,0,0,0,0,0,0};
+int addressOff[] = {0, 0, 0, 0, 0, 0, 0, 0};
+int crc[] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 // Bits de Controle
 int iFrame[] = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -52,15 +57,15 @@ const int sequenceSize = 3;
 const int poolFinalPosition = 4;
 
 // Criado a variavel frame com o respectivo tamanho
-int frame[40];
-int backUpFrame[40];
+int frame[48];
+int backUpFrame[48];
 
 const int seedingDelay = 200;
 const int receivingsDelay = 199;
 
 int receivedDataSize;
-int receivedData[40];
-int receivedSave[40];
+int receivedData[48];
+int receivedSave[48];
 
 void setup()
 {
@@ -79,6 +84,8 @@ void setup()
   flagSize = sizeof(flag1) / sizeof(flag1[0]);
   addressSize = sizeof(addressPri) / sizeof(addressPri[0]);
   iFrameSize = sizeof(iFrame) / sizeof(iFrame[0]);
+  crcSize = sizeof(crc) / sizeof(crc[0]);
+
   receivedDataSize = sizeof(receivedData) / sizeof(receivedData[0]);
   ackPosition = flagSize + addressSize;
 }
@@ -176,7 +183,10 @@ void primarySendFrame()
 
 void makeFrame(const int *flag, const int *addressReceiver, const int *data)
 {
+  // int crc[8];
+  // const int crcSize = sizeof(crc) / sizeof(crc[0]);
   int frameLastPosition = 0;
+
   for (int i = 0; i < flagSize; i++)
   {
     frame[frameLastPosition] = flag[i];
@@ -201,8 +211,14 @@ void makeFrame(const int *flag, const int *addressReceiver, const int *data)
     frameLastPosition++;
   }
 
-  int crc[8];
-  makeCRC();
+  // Cria os bits de CRC
+  xorArrays(addressReceiver, iFrame, data, crc, crcSize);
+
+  for (int i = 0; i < crcSize; i++)
+  {
+    frame[frameLastPosition] = crc[i];
+    frameLastPosition++;
+  }
 
   for (int i = 0; i < flagSize; i++)
   {
@@ -212,9 +228,8 @@ void makeFrame(const int *flag, const int *addressReceiver, const int *data)
 }
 
 void systemOffLineStatus(
-  int *flag,
-  int *data
-)
+    int *flag,
+    int *data)
 {
   for (int i = 0; i < 8; i++)
   {
@@ -224,7 +239,7 @@ void systemOffLineStatus(
 
   sendingReset(flag, data);
   canSend = true;
-  
+
   a = 0;
   b = 0;
   digitalWrite(TX1, a);
@@ -429,15 +444,50 @@ bool nSEqualToNR(int *receivedData)
 }
 
 void sendingReset(
-  const int *flag,
-  const int *data
-) {
+    const int *flag,
+    const int *data)
+{
   makeFrame(flag, addressOff, data);
   primarySendFrame();
 }
 
-//CRC
+// CRC
 /**
  * Para conferir o crc é necessario fazer um ou exclusivo dos dados de Addr+Frame+Data
- * 
-*/
+ *
+ */
+
+// Tratativa de error
+// reenviar quando não for verificado
+
+
+//COmunicação do 2 com 3
+
+void xorArrays(const int array1[], const int array2[], const int array3[], int result[], int size)
+{
+  for (int i = 0; i < size; ++i)
+  {
+    result[i] = array1[i] ^ array2[i] ^ array3[i];
+  }
+}
+
+bool verifyCRC(int *receivedData)
+{
+  const int addressPosition = flagSize;
+  const int iFramePosition = addressPosition + addressSize;
+  const int dataPosition = iFramePosition + iFrameSize;
+  const int crcPositionInFrame = dataPosition + dataSize;
+
+  for (int i = 0; i < byteSize; i++)
+  {
+    int crcBit = receivedData[crcPositionInFrame + i];
+
+    int xorResult = receivedData[addressPosition + i] ^
+                    receivedData[iFramePosition + i] ^
+                    receivedData[dataPosition + i];
+
+    if (xorResult != crcBit)
+      return false;
+  }
+  return true;
+}
