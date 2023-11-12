@@ -27,25 +27,32 @@ int iFrameSize;
 int crcSize;
 const int byteSize = 8;
 
-
 int addressPri[] = {1, 1, 1, 1, 1, 1, 1, 1};
 
 int addressSec1[] = {1, 1, 1, 1, 1, 1, 1, 0};
 int flag[] = {0, 0, 0, 0, 0, 1, 0, 1};
 int addressSec2[] = {1, 1, 1, 1, 1, 1, 0, 1};
 
+const int requestDataPattern[] = {0, 0, 0, 0, 0, 0, 0, 1};
+
 int data[] = {1, 1, 1, 1, 1, 1, 1, 1};
+const int dataToS3[] = {0, 0, 1, 1, 1, 1, 1, 1};
 
 int iFrame[] = {0, 0, 0, 0, 1, 0, 0, 0};
 int crc[] = {0, 0, 0, 0, 0, 0, 0, 0};
 
+// 00000101 - 11111110 - 00000000 - 11111111 - 00000001 - 00000101
+// flag adress iframe data crc flag
+
 const int nsPosition = 1;
 const int nrPosition = 5;
+const int dataPosition = 24;
 const int sequenceSize = 3;
 const int poolFinalPosition = 4;
 
 const int seedingDelay = 200;
 const int receivingsDelay = 199;
+bool shoudSendDataToS3 = false;
 
 // Criado a variavel frame com o respectivo tamanho
 int frame[48];
@@ -75,7 +82,12 @@ void loop()
 {
   if (receiveData() == true)
   {
-    sendConfirmation();
+    if (shoudSendDataToS3)
+    {
+      sendDataToS3();
+    }
+    else
+      sendConfirmation();
   }
 }
 
@@ -91,7 +103,7 @@ bool receiveData()
 
 void makeFrame(const int *flag, const int *addressReceiver, const int *data)
 {
-  //Serial.println("makeFrame");
+  // Serial.println("makeFrame");
   int frameLastPosition = 0;
   for (int i = 0; i < flagSize; i++)
   {
@@ -126,24 +138,24 @@ void makeFrame(const int *flag, const int *addressReceiver, const int *data)
     frameLastPosition++;
   }
 
-  //Serial.println("Flag - end");
-  //Serial.println(frameLastPosition);
+  // Serial.println("Flag - end");
+  // Serial.println(frameLastPosition);
   for (int i = 0; i < flagSize; i++)
   {
-    
+
     frame[frameLastPosition] = flag[i];
-    //Serial.print(frame[frameLastPosition]);
+    // Serial.print(frame[frameLastPosition]);
     frameLastPosition++;
   }
 
-  //printFrame();
+  // printFrame();
 }
 
-//00000101 - 11111110 - 00000000 - 11111111 - 00000001 - 00000101
-//flag adress iframe data crc flag
-//00000101 - 11111111 - 00001001 - 11111111 - 00000101 - 00000000
+// 00000101 - 11111110 - 00000000 - 11111111 - 00000001 - 00000101
+// flag adress iframe data crc flag
+// 00000101 - 11111111 - 00001001 - 11111111 - 00000101 - 00000000
 
-//00001011 - 11111100 - 01000100 - 11111111 - 00100011 - 00000101
+// 00001011 - 11111100 - 01000100 - 11111111 - 00100011 - 00000101
 void sendFrame()
 {
   Serial.println("sendFrame");
@@ -218,12 +230,6 @@ bool receive()
 {
   readingData();
 
-  // for (int i = 0; i < receivedDataSize; i++)
-  // {
-  //   Serial.print(receivedData[i]);
-  // }
-  // Serial.println();
-
   if (verifyAddres(receivedData) == false)
   {
 
@@ -255,14 +261,19 @@ bool receive()
     return false;
   }
 
-  //Serial.println("Confirmed receive");
+  if (hasSendCommand(receivedData) == true)
+  {
+    shoudSendDataToS3 = true;
+  }
 
-  return true;
+    // Serial.println("Confirmed receive");
+
+    return true;
 }
 
 void sendConfirmation()
 {
-  //Serial.println("sendConfirmation");
+  // Serial.println("sendConfirmation");
 
   makeFrame(flag, addressPri, data);
 
@@ -286,8 +297,7 @@ bool verifyAddres(int *receivedData)
 
   return Test_address;
 }
-//0000 0101 - 11111110000000001111111100000001 - 0000 0101
-
+// 0000 0101 - 11111110000000001111111100000001 - 0000 0101
 
 bool verifyFlag(int *receivedData)
 {
@@ -325,7 +335,7 @@ bool bytesAreEqual(int *byte1, int *byte2)
  */
 void incrementNRBits()
 {
-  //Serial.println("incrementNRBits");
+  // Serial.println("incrementNRBits");
 
   // for (int i = 0; i < iFrameSize; i++)
   // {
@@ -372,11 +382,11 @@ bool dataNSEqualToLocalNR(int *receivedData)
   //   Serial.println(iFrame[i]);
   // }
 
-  //Serial.println("Iframe:");
+  // Serial.println("Iframe:");
   for (int i = nrPosition; i < nrLimit; i++)
   {
-    //Serial.print(iFrame[i]);
-    //Serial.print(receivedData[receivedDataNSPostion]);
+    // Serial.print(iFrame[i]);
+    // Serial.print(receivedData[receivedDataNSPostion]);
     if (iFrame[i] == receivedData[receivedDataNSPostion])
     {
       receivedDataNSPostion++;
@@ -413,6 +423,19 @@ bool verifyCRC(int *receivedData)
   return true;
 }
 
+bool hasSendCommand(int *receivedData)
+{
+
+  for (int i = 0; i < byteSize; i++)
+  {
+    if (requestDataPattern[i] != receivedData[dataPosition + i])
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
 // Tratativa de error
 // reenviar quando não for verificado
 
@@ -432,6 +455,24 @@ void printFrame()
   {
     Serial.print(frame[i]);
   }
+}
 
+void sendDataToS3()
+{
+  makeFrame(flag, addressPri, dataToS3);
+
+  delay(100);
+
+  sendFrame();
+
+  incrementNSBits();
+}
+
+/**
+ * Bits de contagem de envios do primário
+ */
+void incrementNSBits()
+{
+  incrementBinary(iFrame, nsPosition, nsPosition + 2);
 }
 

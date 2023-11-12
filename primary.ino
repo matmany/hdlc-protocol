@@ -10,8 +10,11 @@ bool canSend = true;
 
 const int pinBit1 = 2;
 const int pinBit2 = 3;
+const int pinBit3 = 4;
+
 int key1 = 0;
 int key2 = 0;
+int key3 = 0;
 
 // RS485
 int a;
@@ -36,6 +39,9 @@ int data2[] = {1, 1, 1, 0, 0, 0, 1, 1};
 int data3[] = {1, 1, 1, 1, 1, 1, 1, 1};
 int data4[8];
 
+const int requestDataPattern[] = {0, 0, 0, 0, 0, 0, 0, 1};
+int requestDataSize;
+
 // Flags padrões
 int flag1[] = {0, 0, 0, 0, 0, 1, 0, 1};
 int flag2[] = {0, 0, 0, 0, 0, 0, 1, 0};
@@ -54,6 +60,8 @@ const int nsPosition = 1;
 const int nrPosition = 5;
 const int sequenceSize = 3;
 const int poolFinalPosition = 4;
+const int dataPosition = 24;
+const int framePostion = 16;
 
 // Criado a variavel frame com o respectivo tamanho
 int frame[48];
@@ -71,6 +79,7 @@ void setup()
   Serial.begin(9600);
   pinMode(pinBit1, INPUT);
   pinMode(pinBit2, INPUT);
+  pinMode(pinBit3, INPUT);
 
   pinMode(RX1, INPUT);  // SAIDA PARA COMUNICAÇÃO
   pinMode(TX1, OUTPUT); // SAIDA PARA COMUNICAÇÃO
@@ -84,6 +93,7 @@ void setup()
   addressSize = sizeof(addressPri) / sizeof(addressPri[0]);
   iFrameSize = sizeof(iFrame) / sizeof(iFrame[0]);
   crcSize = sizeof(crc) / sizeof(crc[0]);
+  requestDataSize = sizeof(requestDataPattern) / sizeof(requestDataPattern);
 
   receivedDataSize = sizeof(receivedData) / sizeof(receivedData[0]);
   ackPosition = flagSize + addressSize;
@@ -91,18 +101,18 @@ void setup()
 
 void loop()
 {
-
   key1 = digitalRead(pinBit1);
   key2 = digitalRead(pinBit2);
+  key3 = digitalRead(pinBit3);
 
   // CHAVES OFF
-  if (key2 == 0 && key1 == 0)
+  if (key2 == 0 && key1 == 0 && key3 == 0)
   {
     systemOffLineStatus(flag1, data1);
   }
 
   // CHAVES ATIVA SEC1
-  else if (key2 == 0 && key1 == 1)
+  else if (key3 == 0 && key2 == 0 && key1 == 1)
   {
     if (canSend)
     {
@@ -113,7 +123,7 @@ void loop()
   }
 
   // CHAVES ATIVA SEC2
-  else if (key2 == 1 && key1 == 0)
+  else if (key2 == 1 && key1 == 0 && key3 == 0)
   {
     if (canSend)
     {
@@ -124,26 +134,38 @@ void loop()
   }
 
   // CHAVES ATIVA SEC1 para SEC2
-  else
+  else if(key3 == 1)
   {
+    Serial.println("Send S1 to S2");
     s1SendDataToS2();
   }
 }
 
 void s1SendDataToS2()
 {
-  for (int i = 0; i < 8; i++)
-  {
-    iFrame[i] = 0;
-  }
-  Serial.println("Ainda sem Informacao");
-  a = 0;
-  b = 0;
-  digitalWrite(TX1, a);
-  digitalWrite(TX2, b);
-  delay(1000);
 
-  canSend = true;
+  // Perguntar ao s1
+  askData(addressSec1);
+
+  canSend = false;
+
+  // receber dados de s1
+  // receiveConfirmation();
+  Serial.println("Read from S1");
+  simpleRead();
+
+  Serial.println("Send to S2");
+  // enviar dados para s2
+  deliveryDataFromSecundary(addressSec2);
+
+  Serial.println("Read from S2");
+  // confirma s2
+  simpleRead();
+
+  Serial.println("Confirm To S1");
+  // envia confirmção s1
+  deliveryDataFromSecundary(addressSec1);
+
 }
 
 void primarySendFrame()
@@ -180,7 +202,7 @@ void primarySendFrame()
   Serial.println();
 }
 
-void makeFrame(const int *flag, const int *addressReceiver, const int *data)
+void makeFrame(const int *flag, const int *addressReceiver, const int *data, int *iFrameLocal)
 {
   // int crc[8];
   // const int crcSize = sizeof(crc) / sizeof(crc[0]);
@@ -200,7 +222,7 @@ void makeFrame(const int *flag, const int *addressReceiver, const int *data)
 
   for (int i = 0; i < iFrameSize; i++)
   {
-    frame[frameLastPosition] = iFrame[i];
+    frame[frameLastPosition] = iFrameLocal[i];
     frameLastPosition++;
   }
 
@@ -211,7 +233,7 @@ void makeFrame(const int *flag, const int *addressReceiver, const int *data)
   }
 
   // Cria os bits de CRC
-  xorArrays(addressReceiver, iFrame, data, crc, crcSize);
+  xorArrays(addressReceiver, iFrameLocal, data, crc, crcSize);
 
   for (int i = 0; i < crcSize; i++)
   {
@@ -236,7 +258,7 @@ void systemOffLineStatus(
   }
   Serial.println("Sistema off_line");
 
-  //sendingReset(flag, data);
+  // sendingReset(flag, data);
   canSend = true;
 
   a = 0;
@@ -269,7 +291,7 @@ void sendingMoment(
     const int *data)
 {
   Serial.println("Enviando...");
-  makeFrame(flag, addressReceiver, data);
+  makeFrame(flag, addressReceiver, data, iFrame);
 
   storeFrame();
 
@@ -280,6 +302,18 @@ void sendingMoment(
   incrementNSBits();
 
   canSend = false;
+}
+
+void deliveryDataFromSecundary(int *adress)
+{
+  int dataFromReceivedFrame[8];
+  int iFrameFromReceivedFrame[8];
+
+  getBytesFromReceivedFrame(dataFromReceivedFrame, iFrameFromReceivedFrame);
+
+  makeFrame(flag1, adress, dataFromReceivedFrame, iFrameFromReceivedFrame);
+
+  primarySendFrame();
 }
 
 void readingData()
@@ -452,15 +486,9 @@ void sendingReset(
     const int *flag,
     const int *data)
 {
-  makeFrame(flag, addressOff, data);
+  makeFrame(flag, addressOff, data, iFrame);
   primarySendFrame();
 }
-
-// CRC
-/**
- * Para conferir o crc é necessario fazer um ou exclusivo dos dados de Addr+Frame+Data
- *
- */
 
 // Tratativa de error
 // reenviar quando não for verificado
@@ -494,4 +522,50 @@ bool verifyCRC(int *receivedData)
       return false;
   }
   return true;
+}
+
+void askData(
+    const int *addressReceiver)
+{
+  makeFrame(flag1, addressReceiver, requestDataPattern, iFrame);
+
+  primarySendFrame();
+}
+
+void getBytesFromReceivedFrame(int dataFromReceivedFrame[], int iFrameFromReceivedFrame[])
+{
+  for (int i = 0; i < byteSize; i++)
+  {
+    dataFromReceivedFrame[i] = receivedData[dataPosition + i];
+    iFrameFromReceivedFrame[i] = receivedData[framePostion + i];
+  }
+}
+
+bool simpleRead()
+{
+  readingData();
+
+  if (verifyAddres(receivedData) == false)
+  {
+    Serial.println("Address fail");
+    return false;
+  }
+
+  if (verifyFlag(receivedData) == false)
+  {
+    Serial.println("Flag fail");
+    return false;
+  }
+
+  if (verifyCRC(receivedData) == false)
+  {
+    Serial.println("CRC fail");
+    return false;
+  }
+
+  // if (nSEqualToNR(receivedData) == false)
+  // {
+  //   Serial.println("NS NR fail");
+  //   return false;
+  // }
 }
