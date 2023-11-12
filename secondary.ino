@@ -91,7 +91,7 @@ bool receiveData()
 
 void makeFrame(const int *flag, const int *addressReceiver, const int *data)
 {
-  Serial.println("makeFrame");
+  //Serial.println("makeFrame");
   int frameLastPosition = 0;
   for (int i = 0; i < flagSize; i++)
   {
@@ -126,17 +126,17 @@ void makeFrame(const int *flag, const int *addressReceiver, const int *data)
     frameLastPosition++;
   }
 
-  Serial.println("Flag - end");
-  Serial.println(frameLastPosition);
+  //Serial.println("Flag - end");
+  //Serial.println(frameLastPosition);
   for (int i = 0; i < flagSize; i++)
   {
     
     frame[frameLastPosition] = flag[i];
-    Serial.print(frame[frameLastPosition]);
+    //Serial.print(frame[frameLastPosition]);
     frameLastPosition++;
   }
 
-  printFrame();
+  //printFrame();
 }
 
 //00000101 - 11111110 - 00000000 - 11111111 - 00000001 - 00000101
@@ -218,11 +218,11 @@ bool receive()
 {
   readingData();
 
-  for (int i = 0; i < receivedDataSize; i++)
-  {
-    Serial.print(receivedData[i]);
-  }
-  Serial.println();
+  // for (int i = 0; i < receivedDataSize; i++)
+  // {
+  //   Serial.print(receivedData[i]);
+  // }
+  // Serial.println();
 
   if (verifyAddres(receivedData) == false)
   {
@@ -255,18 +255,18 @@ bool receive()
     return false;
   }
 
-  Serial.println("Confirmed receive");
+  //Serial.println("Confirmed receive");
 
   return true;
 }
 
 void sendConfirmation()
 {
-  Serial.println("sendConfirmation");
+  //Serial.println("sendConfirmation");
 
   makeFrame(flag, addressPri, data);
 
-  delay(0);
+  delay(100);
 
   sendFrame();
 }
@@ -325,20 +325,20 @@ bool bytesAreEqual(int *byte1, int *byte2)
  */
 void incrementNRBits()
 {
-  Serial.println("incrementNRBits");
+  //Serial.println("incrementNRBits");
 
-  for (int i = 0; i < iFrameSize; i++)
-  {
-    Serial.print(iFrame[i]);
-  }
-  Serial.println();
+  // for (int i = 0; i < iFrameSize; i++)
+  // {
+  //   Serial.print(iFrame[i]);
+  // }
+  // Serial.println();
 
   incrementBinary(iFrame, nrPosition, nrPosition + 2);
 
-  for (int i = 0; i < iFrameSize; i++)
-  {
-    Serial.print(iFrame[i]);
-  }
+  // for (int i = 0; i < iFrameSize; i++)
+  // {
+  //   Serial.print(iFrame[i]);
+  // }
 
   Serial.println();
 }
@@ -372,11 +372,11 @@ bool dataNSEqualToLocalNR(int *receivedData)
   //   Serial.println(iFrame[i]);
   // }
 
-  Serial.println("Iframe:");
+  //Serial.println("Iframe:");
   for (int i = nrPosition; i < nrLimit; i++)
   {
-    Serial.print(iFrame[i]);
-    Serial.print(receivedData[receivedDataNSPostion]);
+    //Serial.print(iFrame[i]);
+    //Serial.print(receivedData[receivedDataNSPostion]);
     if (iFrame[i] == receivedData[receivedDataNSPostion])
     {
       receivedDataNSPostion++;
