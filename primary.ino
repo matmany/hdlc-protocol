@@ -3,7 +3,6 @@
 //
 #include <stdint.h>
 
-
 const int byteSize = 8;
 
 bool sn = false;
@@ -237,7 +236,7 @@ void systemOffLineStatus(
   }
   Serial.println("Sistema off_line");
 
-  sendingReset(flag, data);
+  //sendingReset(flag, data);
   canSend = true;
 
   a = 0;
@@ -338,6 +337,12 @@ void receiveConfirmation()
   if (verifyFlag(receivedData) == false)
   {
     Serial.println("Flag fail");
+    return;
+  }
+
+  if (verifyCRC(receivedData) == false)
+  {
+    Serial.println("CRC fail");
     return;
   }
 
@@ -460,8 +465,7 @@ void sendingReset(
 // Tratativa de error
 // reenviar quando não for verificado
 
-
-//COmunicação do 2 com 3
+// COmunicação do 2 com 3
 
 void xorArrays(const int array1[], const int array2[], const int array3[], int result[], int size)
 {
