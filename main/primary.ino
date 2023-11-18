@@ -1,15 +1,16 @@
 #include <stdint.h>
 
-const int txPin = 10;        // Pino GPIO14 para TX (bit 1)
-const int txPinInverse = 11; // Pino GPIO27 para TX barrado (bit 0)
-const int rxPin = 12;        // Pino GPIO13 para RX de resposta (bit 1)
-const int rxPinInverse = 13; // Pino GPIO12 para RX barrado de resposta (bit 0)
+const int txPin = 13;        // Pino GPIO13 para TX (bit 1)
+const int txPinInverse = 12; // Pino GPIO12 para TX barrado (bit 0)
+const int rxPin = 14;        // Pino GPIO14 para RX de resposta (bit 1)
+const int rxPinInverse = 27; // Pino GPIO27 para RX barrado de resposta (bit 0)
 int cont = 0;
 int timeout = 0;
+int setperg = 0;
 
-const int pinBit1 = 2;
-const int pinBit2 = 3;
-const int pinBit3 = 4;
+const int pinBit1 = 26;
+const int pinBit2 = 25;
+const int pinBit3 = 33;
 
 int key1 = 0;
 int key2 = 0;
@@ -17,9 +18,11 @@ int key3 = 0;
 
 struct Frame
 {
+    // Campos para pré definições
     uint8_t addressPrim;
     uint8_t dataS1S2;
 
+    // Campos para envio
     uint8_t flagInicioFim;
     uint8_t address;
     uint8_t control;
@@ -27,6 +30,7 @@ struct Frame
     uint8_t crc;
     uint8_t flagFim; // Novo campo para o último byte de flag de fim
 
+    // Campos para recebimento
     uint8_t flagInicioRec;
     uint8_t addressRec;
     uint8_t controlRec;
@@ -98,7 +102,12 @@ void loop()
         } else {
             frame.address = 0b00011100;
             frame.data = frameRecebido.dataRec;
-            sendToS1 = true;
+
+            setperg= setperg + 1;
+            if (setperg>=2){
+              sendToS1 = true;
+              setperg = 0;
+            }
         }
 
     }
@@ -116,8 +125,8 @@ void loop()
             cont = 0;
             timeout = 0;
         }
-        Serial.println("Contador");
-        Serial.println(cont);
+        //Serial.println("Contador");
+        //Serial.println(cont);
 
         delay(5000); // Aguarda 5 segundos antes de enviar o próximo frame
     }
@@ -128,13 +137,13 @@ void loop()
         if (timeout >= 100)
         {
             enviardados = true;
+            Serial.println("!!!TIME OUT!!!");
         }
     }
 }
 
 void enviarByte(uint8_t byte)
 {
-    Serial.println("Enviando Byte");
     for (int i = 0; i < 8; i++)
     {
         int a = byte & 0x01;
@@ -151,22 +160,12 @@ void enviarByte(uint8_t byte)
 
 void enviarFrame(const Frame &frame)
 {
-    // Envia cada campo do frame
-    Serial.println("");
-    Serial.println("Enviando Frame Primario");
-    Serial.println("");
     enviarByte(frame.flagInicioFim);
-    Serial.println("Flag inicio enviado");
     enviarByte(frame.address);
-    Serial.println("Endereco enviado");
     enviarByte(frame.control);
-    Serial.println("Controle enviado");
     enviarByte(frame.data);
-    Serial.println("Dados enviado");
     enviarByte(frame.crc);
-    Serial.println("CRC enviado");
     enviarByte(frame.flagFim);
-    Serial.println("Flag Fim enviado");
     Serial.println("");
     Serial.println("Frame Primario Enviado");
     Serial.println("");
@@ -218,10 +217,11 @@ void receberResposta()
                 verificaCrc(frameRecebido)
                 )
             {
+              	Serial.print("");
                 Serial.println("Recebeu dados do ESP32 Secundario");
                 processarDados();
                 enviardados = true;
-                delay(1000);
+                //delay(1000);
             }
             else
             {
@@ -258,7 +258,8 @@ void processarDados()
 {
     // Implemente aqui a lógica para processar os dados recebidos.
     // Neste exemplo, apenas exibimos os dados no monitor serial.
-    Serial.print("Flag de Inicio Recebido: ");
+    Serial.println("");
+  	Serial.print("Flag de Inicio Recebido: ");
     Serial.println(frameRecebido.flagInicioRec, BIN);
 
     Serial.print("Address Recebido: ");
@@ -275,7 +276,7 @@ void processarDados()
 
     Serial.print("Flag de Fim Recebido: ");
     Serial.println(frameRecebido.flagFimRec, BIN);
-    Serial.print("");
+    Serial.println("");
 
     frame.control = ajustarControl(frameRecebido.controlRec);    
     
@@ -289,6 +290,7 @@ void processarEnviados()
 {
     // Implemente aqui a lógica para processar os dados recebidos.
     // Neste exemplo, apenas exibimos os dados no monitor serial.
+    Serial.println("");
     Serial.print("Flag de Inicio Enviado: ");
     Serial.println(frame.flagInicioFim, BIN);
 
@@ -306,7 +308,7 @@ void processarEnviados()
 
     Serial.print("Flag de Fim Enviado: ");
     Serial.println(frame.flagFim, BIN);
-    Serial.print("");
+    Serial.println("");
 }
 
 uint8_t ajustarControl(uint8_t controlAtual)

@@ -1,9 +1,9 @@
 #include <stdint.h>
 
-const int rxPin = 10;        // Pino GPIO13 para RX (bit 1)
-const int rxPinInverse = 11; // Pino GPIO12 para RX barrado (bit 0)
-const int txPin = 12;        // Pino GPIO14 para TX de resposta (bit 1)
-const int txPinInverse = 13; // Pino GPIO27 para TX barrado de resposta (bit 0)
+const int rxPin = 13;        // Pino GPIO13 para RX (bit 1)
+const int rxPinInverse = 12; // Pino GPIO12 para RX barrado (bit 0)
+const int txPin = 14;        // Pino GPIO14 para TX de resposta (bit 1)
+const int txPinInverse = 27; // Pino GPIO27 para TX barrado de resposta (bit 0)
 int cont = 0;
 
 struct Frame
@@ -97,16 +97,22 @@ void loop()
     {
 
       // Processa os dados recebidos
-      if (
-          FrameSec1.addressSec1 == frameRecebido.address &&
-          verificaCrc(frameRecebido))
+      if (FrameSec1.addressSec1 == frameRecebido.address)
       {
-        Serial.println("Recebeu dados do ESP32 Primario");
-        processarDados();
-        enviarResp = true;
+        if(verificaCrc(frameRecebido)){
+          Serial.println("");
+          Serial.println("Recebeu dados do ESP32 Primario");
+          processarDados();
+          enviarResp = true;
+        }
+        else{
+          Serial.println("");
+          Serial.println("Dados Quebrado!!!");
+        }
       }
       else
       {
+        Serial.println("");
         Serial.println("Endereço nao eh Compativel");
         Serial.println(frameRecebido.address, BIN);
         Serial.println(FrameSec1.addressSec1, BIN);
@@ -206,6 +212,7 @@ void processarDadosEnvio()
 {
   // Implemente aqui a lógica para processar os dados recebidos.
   // Neste exemplo, apenas exibimos os dados no monitor serial.
+  Serial.println("");
   Serial.println("Dados para Resposta");
   Serial.println("");
   Serial.print("Flag de Inicio: ");
@@ -241,14 +248,12 @@ void enviarByte(uint8_t byte)
     byte >>= 1; // Desloca para a direita para pegar o próximo bit
     delay(100); // Ajuste conforme necessário
   }
-  Serial.println("");
   delay(0);
 }
 
 void enviarFrame(const Frame &frameResposta)
 {
   // Envia cada campo do frame
-  Serial.println("");
   enviarByte(frameResposta.FlaginicioPrim);
   enviarByte(frameResposta.addressPrim);
   enviarByte(frameResposta.controlPrim);
